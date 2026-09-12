@@ -21,7 +21,7 @@ export const DEBUG = (() => {
  */
 export function $(selector) {
   const el = document.querySelector(selector);
-  if (!el) throw new Error(`Missing element: ${selector}`);
+  if (!el) throw new Error(`找不到页面元素：${selector}`);
   return /** @type {T} */ (el);
 }
 

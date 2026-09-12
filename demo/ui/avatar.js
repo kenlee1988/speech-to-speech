@@ -30,12 +30,12 @@ function waitForConnected(pc, timeoutMs = 15000) {
         resolve();
       } else if (["failed", "closed"].includes(pc.connectionState)) {
         done();
-        reject(new Error(`Avatar WebRTC ${pc.connectionState}`));
+        reject(new Error(`虚拟人 WebRTC 状态：${pc.connectionState}`));
       }
     };
     const timer = window.setTimeout(() => {
       done();
-      reject(new Error("Avatar WebRTC connection timed out"));
+      reject(new Error("虚拟人 WebRTC 连接超时"));
     }, timeoutMs);
     pc.addEventListener("connectionstatechange", changed);
   });
@@ -74,7 +74,7 @@ export class AvatarView extends EventTarget {
     await this.close();
     this.intentionalClose = false;
     this.panel.hidden = false;
-    this.setState("connecting", "Connecting avatar…");
+    this.setState("connecting", "正在连接虚拟人……");
 
     const pc = new RTCPeerConnection({ iceServers });
     const stream = new MediaStream();
@@ -98,7 +98,7 @@ export class AvatarView extends EventTarget {
     });
     pc.addEventListener("connectionstatechange", () => {
       if (!this.intentionalClose && ["failed", "disconnected", "closed"].includes(pc.connectionState)) {
-        this.setState("error", "Avatar disconnected — using voice audio");
+        this.setState("error", "虚拟人已断开，已切换为语音播放");
         this.dispatchEvent(new Event("disconnected"));
         this._release(true);
       }
@@ -118,16 +118,16 @@ export class AvatarView extends EventTarget {
       if (!response.ok) {
         let detail = `${response.status}`;
         try { detail = (await response.json()).detail || detail; } catch {}
-        throw new Error(`Avatar offer failed (${detail})`);
+        throw new Error(`虚拟人连接请求失败（${detail}）`);
       }
       const answer = await response.json();
-      if (!answer.sdp || !answer.type) throw new Error("Avatar returned an invalid answer");
+      if (!answer.sdp || !answer.type) throw new Error("虚拟人返回了无效响应");
       await pc.setRemoteDescription(answer);
       await waitForConnected(pc);
-      this.setState("connected", "Avatar connected");
+      this.setState("connected", "虚拟人已连接");
       return true;
     } catch (error) {
-      this.setState("error", "Avatar unavailable — using voice audio");
+      this.setState("error", "虚拟人不可用，已切换为语音播放");
       this._release(true);
       throw error;
     }
@@ -149,6 +149,6 @@ export class AvatarView extends EventTarget {
 
   async close() {
     this._release(true);
-    this.setState("idle", "Avatar idle");
+    this.setState("idle", "虚拟人未连接");
   }
 }

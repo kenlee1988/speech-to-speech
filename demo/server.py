@@ -122,8 +122,8 @@ def _parse_ice_servers(raw: str) -> list:
 RTC_ICE_SERVERS = _parse_ice_servers(os.environ.get("RTC_ICE_SERVERS", ""))
 LIVETALKING_ICE_SERVERS = _parse_ice_servers(os.environ.get("LIVETALKING_ICE_SERVERS", ""))
 DEFAULT_STARTUP_GREETING = (
-    "Start the conversation now with a brief, spontaneous greeting in character. "
-    "Keep it to one sentence, invite the user in naturally, and vary the wording each time."
+    "请现在使用中文，以符合角色设定的简短问候开始对话。"
+    "只说一句话，自然地邀请用户开口，每次尽量使用不同表达。"
 )
 # Exposed to the browser through /api/config. Set an empty value to disable the
 # automatic greeting without changing the client bundle.
@@ -177,7 +177,7 @@ def agents_sdk_bundle():
     )
     path = bundled if os.path.isfile(bundled) else installed
     if not os.path.isfile(path):
-        raise HTTPException(status_code=503, detail="Run npm ci in demo/")
+        raise HTTPException(status_code=503, detail="请先在 demo/ 目录中运行 npm ci")
     return FileResponse(path, media_type="text/javascript")
 
 # Wire HF OAuth before the app serves (no-op unless the OAuth env is present).
@@ -241,20 +241,20 @@ def config():
 async def avatar_offer(request: Request):
     """Forward one browser WebRTC offer to the deployment-owned LiveTalking."""
     if not LIVETALKING_ENABLED:
-        raise HTTPException(status_code=404, detail="LiveTalking avatar is disabled")
+        raise HTTPException(status_code=404, detail="LiveTalking 虚拟人已禁用")
     try:
         payload = await request.json()
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid JSON offer") from exc
+        raise HTTPException(status_code=400, detail="无效的 JSON 连接请求") from exc
     if not isinstance(payload, dict) or not payload.get("sdp") or not payload.get("type"):
-        raise HTTPException(status_code=400, detail="Offer requires sdp and type")
+        raise HTTPException(status_code=400, detail="连接请求缺少 sdp 或 type")
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             upstream = await client.post(f"{LIVETALKING_URL}/offer", json=payload)
     except httpx.RequestError as exc:
         logger.warning("LiveTalking offer failed: %s", exc)
-        raise HTTPException(status_code=502, detail="LiveTalking is unavailable") from exc
+        raise HTTPException(status_code=502, detail="LiveTalking 当前不可用") from exc
 
     content_type = upstream.headers.get("content-type", "application/json")
     return Response(content=upstream.content, status_code=upstream.status_code, media_type=content_type)
@@ -291,12 +291,12 @@ async def search(req: SearchRequest):
     the user brought their own (then theirs is used for this request only)."""
     query = (req.query or "").strip()
     if not query:
-        raise HTTPException(status_code=400, detail="Empty query.")
+        raise HTTPException(status_code=400, detail="搜索内容不能为空。")
 
     key = (req.key or "").strip() or SERPER_KEY
     if not key:
         # No server key and the user didn't supply one — search is unavailable.
-        raise HTTPException(status_code=503, detail="Search is not configured.")
+        raise HTTPException(status_code=503, detail="尚未配置搜索服务。")
 
     headers = {"X-API-KEY": key, "Content-Type": "application/json"}
     payload = {"q": query, "num": MAX_RESULTS}
@@ -305,7 +305,7 @@ async def search(req: SearchRequest):
             resp = await http.post(SERPER_URL, headers=headers, json=payload)
     except httpx.RequestError as exc:
         logger.warning("Serper unreachable: %r", exc)
-        raise HTTPException(status_code=502, detail="Search provider unreachable.")
+        raise HTTPException(status_code=502, detail="无法连接搜索服务。")
 
     if resp.status_code != 200:
         # Serper's error body carries the real reason (e.g. "Not enough
@@ -317,7 +317,7 @@ async def search(req: SearchRequest):
             msg = resp.json().get("message")
         except Exception:
             pass
-        detail = f"Search provider error ({resp.status_code})"
+        detail = f"搜索服务错误（{resp.status_code}）"
         if msg:
             detail += f": {msg}"
         raise HTTPException(status_code=502, detail=detail)
@@ -357,7 +357,7 @@ async def calls(request: Request):
     client-supplied target would make this an open proxy (SSRF). No env pin,
     no WebRTC — the client keeps such setups on the WebSocket transport."""
     if not SPEECH_TO_SPEECH_URL:
-        raise HTTPException(status_code=404, detail="Not found.")
+        raise HTTPException(status_code=404, detail="未找到请求的内容。")
 
     offer = await request.body()
     url = _webrtc_calls_url(SPEECH_TO_SPEECH_URL)
@@ -368,7 +368,7 @@ async def calls(request: Request):
             resp = await http.post(url, headers={"Content-Type": "application/sdp"}, content=offer)
     except httpx.RequestError as exc:
         logger.warning("s2s calls endpoint unreachable: %r", exc)
-        raise HTTPException(status_code=502, detail="Speech service unreachable.")
+        raise HTTPException(status_code=502, detail="无法连接语音服务。")
 
     # Relay the answer (or the error body) as-is; keep the Location header the
     # s2s server sets on success (the call id, per the OpenAI GA contract).
@@ -397,7 +397,7 @@ async def session(request: Request):
     if not LOAD_BALANCER_URL:
         # No LB configured — this deploy is direct-mode only; the browser should
         # never call this. 404 so it's indistinguishable from a missing route.
-        raise HTTPException(status_code=404, detail="Not found.")
+        raise HTTPException(status_code=404, detail="未找到请求的内容。")
 
     login_reason = auth.oauth_login_required_reason(request)
     if login_reason:
@@ -430,7 +430,7 @@ async def session(request: Request):
             )
     except httpx.RequestError as exc:
         logger.warning("Load balancer unreachable: %r", exc)
-        raise HTTPException(status_code=502, detail="Speech service unreachable.")
+        raise HTTPException(status_code=502, detail="无法连接语音服务。")
 
     # The queue is full: the LB replies 503 {state:"at_capacity"}. Relay it as-is
     # so the client shows a soft "try again shortly", not a hard error.
@@ -456,7 +456,7 @@ async def session(request: Request):
         # The LB's error body may name the reason (e.g. capacity); it carries no
         # secret, so relay a trimmed copy.
         _log_load_balancer_failure("session handshake", lb)
-        raise HTTPException(status_code=502, detail=f"Session handshake failed ({lb.status_code}).")
+        raise HTTPException(status_code=502, detail=f"会话握手失败（{lb.status_code}）。")
 
     data = lb.json()
 
@@ -532,7 +532,7 @@ async def queue_status(queue_id: str, request: Request):
     claims a freed slot — reserve the budget now and return the grant. Re-checks the
     daily budget at claim, since a multi-minute wait could have spent it elsewhere."""
     if not LOAD_BALANCER_URL:
-        raise HTTPException(status_code=404, detail="Not found.")
+        raise HTTPException(status_code=404, detail="未找到请求的内容。")
 
     login_reason = auth.oauth_login_required_reason(request)
     if login_reason:
@@ -547,7 +547,7 @@ async def queue_status(queue_id: str, request: Request):
             lb = await http.get(url, headers=_load_balancer_headers(request))
     except httpx.RequestError as exc:
         logger.warning("Load balancer unreachable: %r", exc)
-        raise HTTPException(status_code=502, detail="Speech service unreachable.")
+        raise HTTPException(status_code=502, detail="无法连接语音服务。")
 
     if lb.status_code == 404:
         # Ticket unknown/expired (reaped after we stopped polling). Tell the client
@@ -559,7 +559,7 @@ async def queue_status(queue_id: str, request: Request):
 
     if lb.status_code != 200:
         _log_load_balancer_failure("queue poll", lb)
-        raise HTTPException(status_code=502, detail=f"Queue poll failed ({lb.status_code}).")
+        raise HTTPException(status_code=502, detail=f"查询队列失败（{lb.status_code}）。")
 
     data = lb.json()
 
@@ -590,7 +590,7 @@ async def queue_status(queue_id: str, request: Request):
 async def queue_leave(queue_id: str, request: Request):
     """Leave the queue from the explicit 'Leave queue' button (a real fetch)."""
     if not LOAD_BALANCER_URL:
-        raise HTTPException(status_code=404, detail="Not found.")
+        raise HTTPException(status_code=404, detail="未找到请求的内容。")
     await _lb_leave(queue_id, request)
     return {"ok": True}
 
@@ -600,7 +600,7 @@ async def queue_end(request: Request):
     """Leave the queue on teardown/tab-close (navigator.sendBeacon, which can only
     POST). Body: { queueId }. Best-effort; the LB reaps the ticket on TTL anyway."""
     if not LOAD_BALANCER_URL:
-        raise HTTPException(status_code=404, detail="Not found.")
+        raise HTTPException(status_code=404, detail="未找到请求的内容。")
     qid = await _queue_id(request)
     if qid:
         await _lb_leave(qid, request)
@@ -670,7 +670,7 @@ async def session_heartbeat(request: Request):
     """Extend the live reservation one chunk at a time. `expired` once the day's
     budget is spent — the client then tears down."""
     if not LIMITER_ENABLED:
-        raise HTTPException(status_code=404, detail="Not found.")
+        raise HTTPException(status_code=404, detail="未找到请求的内容。")
     sid = await _session_id(request)
     alive = bool(sid) and await asyncio.to_thread(limiter.heartbeat, sid)
     return {"expired": not alive}
@@ -681,7 +681,7 @@ async def session_end(request: Request):
     """Clean teardown: reconcile to real elapsed time and refund the unused
     chunk. Sent via navigator.sendBeacon, so it must succeed without a response."""
     if not LIMITER_ENABLED:
-        raise HTTPException(status_code=404, detail="Not found.")
+        raise HTTPException(status_code=404, detail="未找到请求的内容。")
     sid = await _session_id(request)
     if sid:
         await asyncio.to_thread(limiter.end, sid)
