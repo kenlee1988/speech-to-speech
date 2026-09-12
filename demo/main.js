@@ -17,7 +17,7 @@
  * @typedef {S2sRealtimeClient} RealtimeClient
  */
 
-import { S2sRealtimeClient } from "./s2s-realtime-client.js?v=zh-cn-v1";
+import { S2sRealtimeClient } from "./s2s-realtime-client.js?v=immersive-v2";
 import { $, truncateError, DEBUG } from "./ui/dom.js?v=zh-cn-v1";
 import { ChatView } from "./ui/chat.js?v=zh-cn-v1";
 import { Account } from "./ui/account.js?v=zh-cn-v1";
@@ -229,6 +229,12 @@ const avatarVideo = $("#avatar-video");
 const avatarStatus = $("#avatar-status");
 /** @type {HTMLButtonElement} */
 const avatarFullscreenBtn = $("#avatar-fullscreen");
+/** @type {HTMLFormElement} */
+const messageForm = $("#message-form");
+/** @type {HTMLInputElement} */
+const messageInput = $("#message-input");
+/** @type {HTMLButtonElement} */
+const messageSend = $("#message-send");
 
 /** @type {HTMLButtonElement} */
 const settingsBtn = $("#settings-btn");
@@ -468,6 +474,10 @@ function setState(next) {
   leaveQueueBtn.hidden = !inLine;
   leaveQueueBtn.tabIndex = inLine ? 0 : -1;
   if (!yourTurn) stopJoinCountdown();
+
+  const textBusy = next === "connecting" || next === "queued" || next === "your-turn";
+  messageInput.disabled = textBusy;
+  messageSend.disabled = textBusy;
 
   // Warm reassurance under the terse position, only while waiting in line.
   if (next === "queued") {
@@ -1208,6 +1218,31 @@ circleBtn.addEventListener("click", async () => {
   }
 });
 
+messageForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = messageInput.value.trim();
+  if (!message || messageInput.disabled) return;
+
+  messageInput.disabled = true;
+  messageSend.disabled = true;
+  try {
+    if (currentState === "idle" || currentState === "error") {
+      if (missingServerUrl()) { promptServerUrl(); return; }
+      await doStart(createResumedAudioContext(), { greet: false });
+    }
+    if (!client) throw new Error("实时对话尚未连接");
+    client.sendUserText(message);
+    messageInput.value = "";
+  } catch (err) {
+    await handleStartError(err);
+  } finally {
+    const textBusy = currentState === "connecting" || currentState === "queued" || currentState === "your-turn";
+    messageInput.disabled = textBusy;
+    messageSend.disabled = textBusy;
+    if (!textBusy) messageInput.focus();
+  }
+});
+
 /** A failed start is either the daily limit (show the modal, return to idle) or
  *  a real fault (surface it). doStart already closed any orphan AudioContext.
  *  @param {any} err */
@@ -1438,8 +1473,9 @@ function stopJoinCountdown() {
  * made one inside the tap/click gesture (required on iOS); otherwise one is
  * created here, which is still inside the gesture for a direct orb tap.
  * @param {AudioContext | null} [audioContext]
+ * @param {{greet?: boolean}} [options]
  */
-async function doStart(audioContext = null) {
+async function doStart(audioContext = null, options = {}) {
   const transport = effectiveTransport();
   // Resolve the target before touching mic/audio so a misconfiguration (e.g.
   // direct mode with no URL) fails fast with a clear message. Over WebRTC the
@@ -1490,7 +1526,7 @@ async function doStart(audioContext = null) {
   const common = {
     voice: settings.voice,
     instructions: settings.instructions,
-    startupGreeting,
+    startupGreeting: options.greet === false ? "" : startupGreeting,
     acquireMic: acquireMicStream,
     tools: activeToolDefs(),
     audioOutputId: settings.audioOutputId || "",

@@ -28,6 +28,28 @@ test("assistant output mute controls the single AudioContext gain path", () => {
   assert.deepEqual(changes, [[1, 12.5]]);
 });
 
+test("typed user turns share the realtime session and enter processing state", () => {
+  globalThis.localStorage = { getItem() { return null; } };
+  const client = new S2sRealtimeClient({
+    transport: "websocket",
+    directUrl: "ws://unused",
+  });
+  const sent = [];
+  const transcripts = [];
+  const statuses = [];
+  client._session = { sendMessage(message) { sent.push(message); } };
+  client._status = "connected";
+  client.addEventListener("transcript", (event) => transcripts.push(event.detail));
+  client.addEventListener("status", (event) => statuses.push(event.detail.status));
+
+  client.sendUserText("  你好，Kimi  ");
+
+  assert.deepEqual(sent, ["你好，Kimi"]);
+  assert.deepEqual(transcripts, [{ role: "user", text: "你好，Kimi", partial: false }]);
+  assert.equal(client.status, "processing");
+  assert.deepEqual(statuses, ["processing"]);
+});
+
 test("the pinned SDK changes the live voice and explicitly clears all tools", async () => {
   globalThis.localStorage = { getItem() { return null; } };
   globalThis.OpenAIAgentsRealtime = realtime;

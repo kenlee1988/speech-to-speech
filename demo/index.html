@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=zh-cn-v1" />
+    <link rel="stylesheet" href="style.css?v=immersive-v2" />
   </head>
   <!--
     `booting` disables transitions/animations until the first paint commits.
@@ -160,6 +160,23 @@
             退出队列
           </button>
         </div>
+
+        <form id="message-form" class="message-form" autocomplete="off">
+          <label class="sr-only" for="message-input">输入消息</label>
+          <input
+            id="message-input"
+            type="text"
+            maxlength="2000"
+            placeholder="输入消息……"
+            aria-label="输入消息"
+          />
+          <button id="message-send" type="submit" aria-label="发送消息" title="发送消息">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m22 2-7 20-4-9-9-4Z"/>
+              <path d="M22 2 11 13"/>
+            </svg>
+          </button>
+        </form>
           </div>
         </div>
       </main>
@@ -437,6 +454,6 @@
     </dialog>
 
     <script src="vendor/openai-realtime-agents.umd.js"></script>
-    <script type="module" src="main.js?v=zh-cn-v1"></script>
+    <script type="module" src="main.js?v=immersive-v2"></script>
   </body>
 </html>

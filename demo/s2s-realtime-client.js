@@ -634,6 +634,21 @@ export class S2sRealtimeClient extends EventTarget {
     this._transport?.requestResponse();
   }
 
+  /** Send a typed user turn through the same realtime conversation. */
+  sendUserText(text) {
+    const message = text.trim();
+    if (!message) return;
+    if (!this._session || this._status === "connecting" || this._status === "closed") {
+      throw new Error("实时对话尚未连接");
+    }
+    this._responseRequested = true;
+    this._session.sendMessage(message);
+    this.dispatchEvent(new CustomEvent("transcript", { detail: {
+      role: "user", text: message, partial: false,
+    } }));
+    this._setStatus("processing");
+  }
+
   /** @param {string} dataUrl */
   sendUserImage(dataUrl) {
     this._session?.addImage(dataUrl, { triggerResponse: false });

@@ -92,6 +92,18 @@ a:hover {
   display: none !important;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ─── Topbar ──────────────────────────────────────────────────────────── */
 
 /* Topbar is just a floating row of controls over the stage - no
@@ -710,8 +722,32 @@ body.avatar-active .topbar {
   left: 0;
   right: 0;
   color: #fff;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.66), transparent);
+  justify-content: flex-start;
+  padding: 18px 22px;
+  background: rgba(12, 13, 21, 0.92);
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
+}
+body.avatar-active .brand {
+  display: none;
+}
+body.avatar-active .topbar-right {
+  flex-direction: row;
+}
+body.avatar-active .about-btn-mobile {
+  display: inline-flex;
+  order: -1;
+}
+body.avatar-active .topbar-right .icon-btn {
+  width: 44px;
+  height: 44px;
+  border-color: rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(25, 27, 37, 0.86);
+  color: rgba(255, 255, 255, 0.72);
+}
+body.avatar-active .topbar-right .icon-btn:hover {
+  color: #fff;
+  background: rgba(39, 42, 56, 0.92);
 }
 body.avatar-active .stage {
   position: absolute;
@@ -763,12 +799,14 @@ body.avatar-active .voice-stage {
   position: absolute;
   z-index: 4;
   left: 50%;
-  bottom: max(58px, calc(env(safe-area-inset-bottom) + 42px));
-  transform: translateX(-50%);
-  gap: 8px;
+  top: 50%;
+  bottom: auto;
+  width: min(94vw, 620px);
+  transform: translate(-50%, -24%);
+  gap: 12px;
 }
 body.avatar-active .circle {
-  width: clamp(84px, 10vw, 112px);
+  width: clamp(118px, 14vw, 158px);
 }
 body.avatar-active .circle-caption,
 body.avatar-active .circle-subcaption,
@@ -780,13 +818,11 @@ body.avatar-active .queue-actions {
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
 body.avatar-active .footer {
-  position: absolute;
-  z-index: 5;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+  display: none;
+}
+body.avatar-active .avatar-status-wrap,
+body.avatar-active .avatar-fullscreen {
+  display: none;
 }
 
 @media (max-width: 800px) {
@@ -806,6 +842,88 @@ body.avatar-active .footer {
   body.avatar-active .avatar-fullscreen {
     top: max(76px, calc(env(safe-area-inset-top) + 64px));
     bottom: auto;
+  }
+}
+
+/* Screenshot-style typed-message control. It joins the existing realtime
+ * session, so voice and keyboard turns share one conversation history. */
+.message-form {
+  display: flex;
+  align-items: center;
+  width: min(92vw, 560px);
+  gap: 10px;
+  margin-top: 6px;
+}
+.message-form input {
+  min-width: 0;
+  flex: 1;
+  height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  outline: none;
+  background: rgba(25, 28, 42, 0.9);
+  color: var(--text);
+  font: inherit;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+}
+.message-form input::placeholder {
+  color: rgba(245, 246, 250, 0.42);
+}
+.message-form input:focus {
+  border-color: color-mix(in srgb, var(--accent) 62%, white);
+  box-shadow: 0 0 0 3px rgba(139, 125, 255, 0.14), 0 10px 32px rgba(0, 0, 0, 0.28);
+}
+.message-form button {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(105, 90, 255, 0.38);
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+.message-form button:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.04);
+}
+.message-form button:disabled,
+.message-form input:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+.message-form button svg {
+  width: 20px;
+  height: 20px;
+}
+
+body.avatar-active .message-form {
+  margin-top: 12px;
+}
+
+@media (max-width: 600px) {
+  body.avatar-active .topbar {
+    padding: max(12px, env(safe-area-inset-top)) 12px 12px;
+  }
+  body.avatar-active .topbar-right {
+    gap: 7px;
+  }
+  body.avatar-active .topbar-right .icon-btn {
+    width: 38px;
+    height: 38px;
+  }
+  body.avatar-active .voice-stage {
+    top: 48%;
+    transform: translate(-50%, -18%);
+  }
+  body.avatar-active .circle {
+    width: 112px;
   }
 }
 
