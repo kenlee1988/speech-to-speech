@@ -15,7 +15,10 @@ class ResponsesApiLanguageModelHandlerArguments(LanguageModelBaseArguments):
     )
     responses_api_api_key: Optional[str] = field(
         default=None,
-        metadata={"help": "API key used to authenticate access to the OpenAI-compatible API. Default is None."},
+        metadata={
+            "help": "API key used to authenticate the OpenAI-compatible API. "
+            "When unset, the OpenAI client reads OPENAI_API_KEY."
+        },
     )
     responses_api_base_url: Optional[str] = field(
         default=None,

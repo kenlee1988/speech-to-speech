@@ -16,6 +16,59 @@ demo_auth = importlib.import_module("auth")
 demo_server = importlib.import_module("server")
 
 
+def test_config_exposes_avatar_flag_without_service_url(monkeypatch):
+    monkeypatch.setattr(demo_server, "LIVETALKING_ENABLED", True)
+    monkeypatch.setattr(demo_server, "LIVETALKING_ICE_SERVERS", [{"urls": "stun:avatar.example"}])
+
+    result = demo_server.config()
+
+    assert result["avatar"] == {
+        "enabled": True,
+        "iceServers": [{"urls": "stun:avatar.example"}],
+    }
+    assert "livetalkingUrl" not in result
+    assert demo_server.LIVETALKING_URL not in json.dumps(result)
+
+
+async def test_avatar_offer_proxies_to_deployment_url(monkeypatch):
+    calls = []
+
+    class FakeRequest:
+        async def json(self):
+            return {"sdp": "offer-sdp", "type": "offer"}
+
+    class FakeAsyncClient:
+        def __init__(self, **kwargs):
+            calls.append(("init", kwargs))
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, **kwargs):
+            calls.append((url, kwargs))
+            return httpx.Response(
+                200,
+                json={"sdp": "answer-sdp", "type": "answer", "sessionid": 123456},
+                request=httpx.Request("POST", url),
+            )
+
+    monkeypatch.setattr(demo_server, "LIVETALKING_ENABLED", True)
+    monkeypatch.setattr(demo_server, "LIVETALKING_URL", "http://avatar.internal:8010")
+    monkeypatch.setattr(demo_server.httpx, "AsyncClient", FakeAsyncClient)
+
+    response = await demo_server.avatar_offer(FakeRequest())
+
+    assert response.status_code == 200
+    assert json.loads(response.body)["sessionid"] == 123456
+    assert calls[1] == (
+        "http://avatar.internal:8010/offer",
+        {"json": {"sdp": "offer-sdp", "type": "offer"}},
+    )
+
+
 def _mock_whoami(monkeypatch, payload):
     calls = []
 

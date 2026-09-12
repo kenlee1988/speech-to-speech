@@ -17,10 +17,11 @@
  * @typedef {S2sRealtimeClient} RealtimeClient
  */
 
-import { S2sRealtimeClient, normalizePlaybackBufferMs } from "./s2s-realtime-client.js?v=audio-24k-v2";
+import { S2sRealtimeClient, normalizePlaybackBufferMs } from "./s2s-realtime-client.js?v=avatar-v1-audio-24k-v2";
 import { $, truncateError, DEBUG } from "./ui/dom.js";
 import { ChatView } from "./ui/chat.js";
 import { Account } from "./ui/account.js";
+import { AvatarView } from "./ui/avatar.js?v=avatar-v1";
 
 const DEFAULT_VOICE = "Aiden";
 const DEFAULT_INSTRUCTIONS = "You are a friendly voice assistant.";
@@ -40,6 +41,7 @@ const STORAGE_KEYS = {
   transport: "s2s.transport",
   audioInputId: "s2s.audio.inputId",
   audioOutputId: "s2s.audio.outputId",
+  avatarEnabled: "s2s.avatar.enabled",
 };
 
 // ── Noise gate ──────────────────────────────────────────────────────────────
@@ -118,6 +120,7 @@ function loadSettings() {
     transport: localStorage.getItem(STORAGE_KEYS.transport) === "webrtc" ? "webrtc" : "ws",
     audioInputId: localStorage.getItem(STORAGE_KEYS.audioInputId) || "",
     audioOutputId: localStorage.getItem(STORAGE_KEYS.audioOutputId) || "",
+    avatarEnabled: localStorage.getItem(STORAGE_KEYS.avatarEnabled) !== "0",
   };
 }
 
@@ -144,6 +147,7 @@ function saveSettings(s) {
   localStorage.setItem(STORAGE_KEYS.transport, s.transport);
   localStorage.setItem(STORAGE_KEYS.audioInputId, s.audioInputId || "");
   localStorage.setItem(STORAGE_KEYS.audioOutputId, s.audioOutputId || "");
+  localStorage.setItem(STORAGE_KEYS.avatarEnabled, s.avatarEnabled ? "1" : "0");
 }
 
 /** @returns {{ web_search: boolean, camera_snapshot: boolean }} */
@@ -214,6 +218,12 @@ const queueActions = $("#queue-actions");
 const joinQueueBtn = $("#join-queue-btn");
 /** @type {HTMLButtonElement} */
 const leaveQueueBtn = $("#leave-queue-btn");
+/** @type {HTMLElement} */
+const avatarPanel = $("#avatar-panel");
+/** @type {HTMLVideoElement} */
+const avatarVideo = $("#avatar-video");
+/** @type {HTMLElement} */
+const avatarStatus = $("#avatar-status");
 
 /** @type {HTMLButtonElement} */
 const settingsBtn = $("#settings-btn");
@@ -263,6 +273,12 @@ const inputTransport = $("#transport");
 /** @type {HTMLElement} */
 const transportHint = $("#transport-hint");
 /** @type {HTMLElement} */
+const avatarField = $("#avatar-field");
+/** @type {HTMLElement} */
+const avatarHint = $("#avatar-hint");
+/** @type {HTMLInputElement} */
+const inputAvatarEnabled = $("#avatar-enabled");
+/** @type {HTMLElement} */
 const gateField = $("#gate-field");
 /** @type {HTMLElement} */
 const playbackBufferField = $("#playback-buffer-field");
@@ -300,6 +316,15 @@ const settingsForm = /** @type {HTMLFormElement} */ (settingsModal.querySelector
 /** @type {AppState} */
 let currentState = "idle";
 let settings = loadSettings();
+let avatarAvailable = false;
+/** @type {RTCIceServer[]} */
+let avatarIceServers = [];
+let avatarAudioActive = false;
+const avatarView = new AvatarView({ panel: avatarPanel, video: avatarVideo, status: avatarStatus });
+avatarView.addEventListener("disconnected", () => {
+  avatarAudioActive = false;
+  client?.setOutputMuted(false);
+});
 
 // ── Connection target ────────────────────────────────────────────────────────
 // Three modes, decided by the deploy via /api/config:
@@ -462,8 +487,10 @@ function setCaption(text, kind = "") {
 
 function openSettings() {
   syncConnectionUi();
+  syncAvatarUi();
   inputVoice.value = settings.voice;
   inputPlaybackBuffer.value = String(settings.playbackBufferMs);
+  inputAvatarEnabled.checked = settings.avatarEnabled;
   inputInstructions.value = settings.instructions;
   syncGateUi();
   updateRestartAvailability();
@@ -911,6 +938,8 @@ async function fetchConfig() {
       startupGreeting = typeof json.startupGreeting === "string"
         ? json.startupGreeting.trim()
         : "";
+      avatarAvailable = !!json.avatar?.enabled;
+      avatarIceServers = Array.isArray(json.avatar?.iceServers) ? json.avatar.iceServers : [];
       // The conversation-time limiter rides on the LB being present.
       limiterOn = lbMode;
     }
@@ -923,6 +952,7 @@ async function fetchConfig() {
   void account.refresh();
   syncToolsUi();
   syncConnectionUi();
+  syncAvatarUi();
 }
 
 /**
@@ -1004,6 +1034,7 @@ function readSettingsFromForm() {
     ),
     audioInputId: inputAudioInput.value || "",
     audioOutputId: inputAudioOutput.value || "",
+    avatarEnabled: inputAvatarEnabled.checked,
   };
 }
 
@@ -1069,6 +1100,14 @@ function syncConnectionUi() {
   }
 }
 
+/** Show avatar controls only when the server has explicitly enabled them. */
+function syncAvatarUi() {
+  avatarField.hidden = !avatarAvailable;
+  avatarHint.hidden = !avatarAvailable;
+  inputAvatarEnabled.checked = settings.avatarEnabled;
+  avatarPanel.hidden = !(avatarAvailable && (settings.avatarEnabled || avatarAudioActive));
+}
+
 /** True when the user must supply a server URL before connecting (direct mode
  *  with nothing set). */
 function missingServerUrl() {
@@ -1116,6 +1155,12 @@ inputTransport.addEventListener("change", () => {
   settings.transport = inputTransport.value === "webrtc" ? "webrtc" : "ws";
   localStorage.setItem(STORAGE_KEYS.transport, settings.transport);
   syncTransportUi();
+});
+
+inputAvatarEnabled.addEventListener("change", () => {
+  settings.avatarEnabled = inputAvatarEnabled.checked;
+  localStorage.setItem(STORAGE_KEYS.avatarEnabled, settings.avatarEnabled ? "1" : "0");
+  syncAvatarUi();
 });
 
 restartBtn.addEventListener("click", async () => {
@@ -1411,6 +1456,17 @@ async function doStart(audioContext = null) {
     throw err;
   }
 
+  avatarAudioActive = false;
+  if (avatarAvailable && settings.avatarEnabled && audioContext) {
+    setCaption("Connecting avatar…", "muted");
+    try {
+      await avatarView.connect(audioContext, "/api/avatar/offer", avatarIceServers);
+      avatarAudioActive = true;
+    } catch (error) {
+      console.warn("[main] avatar unavailable; falling back to voice audio:", error);
+    }
+  }
+
   // The webcam is started on arrival (autoStartCamera), so nothing to do here;
   // a still-pending grant just means the snapshot tool isn't ready yet.
 
@@ -1421,6 +1477,7 @@ async function doStart(audioContext = null) {
     acquireMic: acquireMicStream,
     tools: activeToolDefs(),
     audioOutputId: settings.audioOutputId || "",
+    playAudio: !avatarAudioActive,
     executeTool: async ({ name, arguments: args, callId }) => {
       chat.onToolCall(name);
       const result = await runTool(name, args, callId);
@@ -1444,6 +1501,7 @@ async function doStart(audioContext = null) {
         ...common,
       });
   client = c;
+  c.setOutputMuted(avatarAudioActive);
   c.setMuted(micMuted || userAudioReplaying);
 
   c.addEventListener("queue", (e) => {
@@ -1649,6 +1707,9 @@ async function teardown() {
   endTrackedSession();
   endQueueTicket();
   chat.reset({ dismiss: true });
+  avatarAudioActive = false;
+  await avatarView.close();
+  syncAvatarUi();
   if (client) {
     try {
       await client.close();

@@ -12,7 +12,10 @@ class OpenAICompatibleTTSHandlerArguments:
     )
     openai_tts_api_key: Optional[str] = field(
         default=None,
-        metadata={"help": "Optional bearer token. If unset, OPENAI_API_KEY is used when available."},
+        metadata={
+            "help": "Optional bearer token. If unset, OPENAI_TTS_API_KEY is used; "
+            "the official OpenAI URL also falls back to OPENAI_API_KEY."
+        },
     )
     openai_tts_model: str = field(
         default="Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
