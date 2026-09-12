@@ -73,7 +73,7 @@ function codedError(message, code, extra) {
 
 function sdk() {
   const value = globalThis.OpenAIAgentsRealtime;
-  if (!value) throw new Error("OpenAI Agents SDK bundle is not loaded");
+  if (!value) throw new Error("OpenAI Agents SDK 未加载");
   return value;
 }
 
@@ -144,14 +144,14 @@ export class S2sRealtimeClient extends EventTarget {
   }
 
   async connect() {
-    if (this._session) throw new Error("Already connected");
+    if (this._session) throw new Error("已经建立连接");
     let url;
     if (this.options.transport === "websocket") {
       if (this._directUrl) {
         url = this._directUrl;
         this._setStatus("connecting");
       } else {
-        if (!this._sessionUrl) throw new Error("No session endpoint or direct URL configured");
+        if (!this._sessionUrl) throw new Error("未配置会话端点或直连地址");
         this._setStatus("creating-session");
         const { grant, waited } = await this._createSessionOrQueue();
         if (this._closed) throw codedError("connect aborted", "aborted");
@@ -170,7 +170,7 @@ export class S2sRealtimeClient extends EventTarget {
       this.options.micStream = await this._acquireMic();
     }
     if (this._closed) throw codedError("connect aborted", "aborted");
-    if (!this.options.micStream?.getAudioTracks()[0]) throw new Error("No microphone track available");
+    if (!this.options.micStream?.getAudioTracks()[0]) throw new Error("没有可用的麦克风音轨");
 
     await this._setupAudio();
     const { OpenAIRealtimeWebRTC, OpenAIRealtimeWebSocket, RealtimeSession } = sdk();
@@ -210,7 +210,7 @@ export class S2sRealtimeClient extends EventTarget {
       if (state === "disconnected" && !this._closing && this._status !== "error") {
         this._setStatus("error");
         this.dispatchEvent(new CustomEvent("error", {
-          detail: { error: new Error("Realtime transport disconnected") },
+          detail: { error: new Error("实时传输连接已断开") },
         }));
       }
     });
@@ -256,7 +256,7 @@ export class S2sRealtimeClient extends EventTarget {
       execute: async (args, _context, details) => {
         const callId = details?.toolCall?.callId || "";
         const argumentsJson = JSON.stringify(args ?? {});
-        if (!this.options.executeTool) throw new Error(`No executor for ${definition.name}`);
+        if (!this.options.executeTool) throw new Error(`工具 ${definition.name} 没有可用的执行器`);
         const result = await this.options.executeTool({
           name: definition.name,
           arguments: argumentsJson,
@@ -302,8 +302,8 @@ export class S2sRealtimeClient extends EventTarget {
       const captureConfigured = new Promise((resolve, reject) => {
         const timeout = window.setTimeout(() => {
           reject(new Error(
-            "The microphone audio processor did not report its sample rate. "
-            + "Close every tab for this demo, reopen it, and try again.",
+            "麦克风音频处理器未上报采样率。"
+            + "请关闭本 Demo 的所有页面，重新打开后再试。",
           ));
         }, CAPTURE_CONFIG_TIMEOUT_MS);
         capture.port.onmessage = (event) => {
@@ -321,8 +321,8 @@ export class S2sRealtimeClient extends EventTarget {
             );
             if (outputRate !== AUDIO_SAMPLE_RATE || version !== AUDIO_WORKLET_VERSION) {
               reject(new Error(
-                `Microphone sample-rate mismatch: processor ${version} outputs ${outputRate} Hz; `
-                + `the client expects ${AUDIO_SAMPLE_RATE} Hz.`,
+                `麦克风采样率不匹配：处理器 ${version} 输出 ${outputRate} Hz；`
+                + `客户端需要 ${AUDIO_SAMPLE_RATE} Hz。`,
               ));
               return;
             }
@@ -690,7 +690,7 @@ export class S2sRealtimeClient extends EventTarget {
       this._joinTimer = setTimeout(() => {
         this._joinResolve = null;
         this._joinReject = null;
-        reject(codedError("Your spot expired", "join-expired"));
+        reject(codedError("你的位置已过期", "join-expired"));
       }, windowSeconds * 1000);
     });
   }
@@ -713,17 +713,17 @@ export class S2sRealtimeClient extends EventTarget {
     });
     if (response.status === 402) {
       const body = await response.json().catch(() => ({}));
-      throw codedError("Daily conversation limit reached", "limit", { tier: body?.tier });
+      throw codedError("已达到每日对话时长上限", "limit", { tier: body?.tier });
     }
     if (response.status === 401) {
       const body = await response.json().catch(() => ({}));
-      throw codedError("Sign in again to continue", "login-required", { loginUrl: body?.loginUrl });
+      throw codedError("请重新登录后继续", "login-required", { loginUrl: body?.loginUrl });
     }
     if (response.status === 503) {
       const body = await response.json().catch(() => ({}));
-      if (body?.state === "at_capacity") throw codedError("The queue is full — try again shortly.", "queue-full");
+      if (body?.state === "at_capacity") throw codedError("等待队列已满，请稍后再试。", "queue-full");
     }
-    if (!response.ok) throw new Error(`/session failed (${response.status}): ${await response.text()}`);
+    if (!response.ok) throw new Error(`创建会话失败（${response.status}）：${await response.text()}`);
     const json = await response.json();
     if (json.state === "queued") return {
       state: "queued", queueId: json.queue_id, position: json.position, pollIntervalS: json.poll_interval_s,
@@ -745,13 +745,13 @@ export class S2sRealtimeClient extends EventTarget {
       } catch { continue; }
       if (response.status === 402) {
         const body = await response.json().catch(() => ({}));
-        throw codedError("Daily conversation limit reached", "limit", { tier: body?.tier });
+        throw codedError("已达到每日对话时长上限", "limit", { tier: body?.tier });
       }
       if (response.status === 401) {
         const body = await response.json().catch(() => ({}));
-        throw codedError("Sign in again to continue", "login-required", { loginUrl: body?.loginUrl });
+        throw codedError("请重新登录后继续", "login-required", { loginUrl: body?.loginUrl });
       }
-      if (response.status === 404) throw codedError("Queue timed out", "queue-expired");
+      if (response.status === 404) throw codedError("排队已超时", "queue-expired");
       if (!response.ok) continue;
       const json = await response.json().catch(() => null);
       if (!json) continue;

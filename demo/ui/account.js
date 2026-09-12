@@ -11,7 +11,7 @@
  * Inert unless the deploy is in LB mode (`/api/me` → `{enabled:true}`).
  */
 
-import { $, escHtml } from "./dom.js";
+import { $, escHtml } from "./dom.js?v=zh-cn-v1";
 
 const PRO_URL = "https://huggingface.co/subscribe/pro";
 
@@ -85,7 +85,7 @@ export class Account {
     if (!me.loggedIn) {
       // Signed-out: a sign-in pill (only when OAuth is actually available).
       if (me.auth && me.loginUrl) {
-        this._root.innerHTML = `<a class="signin-pill" href="${escHtml(me.loginUrl)}" title="Sign in for more time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg><span>Sign in</span></a>`;
+        this._root.innerHTML = `<a class="signin-pill" href="${escHtml(me.loginUrl)}" title="登录以获取更多时长"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg><span>登录</span></a>`;
       } else {
         this._root.innerHTML = "";
         this._root.hidden = true;
@@ -102,14 +102,14 @@ export class Account {
       : `<span class="account-avatar account-avatar-fallback">${escHtml((me.username || "?")[0].toUpperCase())}</span>`;
     const remaining =
       isUnlimited || me.remainingSec == null
-        ? "Unlimited"
-        : `${fmt(me.remainingSec)} left today`;
-    const tierLabel = isPro ? "PRO" : isUnlimited ? "Team" : "Free";
+        ? "无限"
+        : `今日剩余 ${fmt(me.remainingSec)}`;
+    const tierLabel = isPro ? "PRO" : isUnlimited ? "团队" : "免费";
 
     this._root.innerHTML = `
       <button id="account-chip" class="account-chip" aria-haspopup="true" aria-expanded="false">
         ${avatar}
-        <span class="account-handle">${escHtml(me.username || "you")}</span>
+        <span class="account-handle">${escHtml(me.username || "你")}</span>
         ${isPro
           ? '<span class="account-pro">PRO</span>'
           : me.tier === "org"
@@ -117,13 +117,13 @@ export class Account {
             : ""}
       </button>
       <div id="account-pop" class="account-pop" hidden>
-        <div class="account-pop-row account-pop-name">${escHtml(me.username || "you")}</div>
+        <div class="account-pop-row account-pop-name">${escHtml(me.username || "你")}</div>
         <div class="account-pop-row account-pop-meta">
           <span class="account-tier">${tierLabel}</span>
           <span class="account-remaining">${escHtml(remaining)}</span>
         </div>
-        ${isUnlimited ? "" : `<a class="account-pop-link" href="${PRO_URL}" target="_blank" rel="noopener">Upgrade to PRO</a>`}
-        <a class="account-pop-link account-signout" href="${escHtml(me.logoutUrl || "#")}">Sign out</a>
+        ${isUnlimited ? "" : `<a class="account-pop-link" href="${PRO_URL}" target="_blank" rel="noopener">升级到 PRO</a>`}
+        <a class="account-pop-link account-signout" href="${escHtml(me.logoutUrl || "#")}">退出登录</a>
       </div>`;
 
     const chip = $("#account-chip");
@@ -157,13 +157,13 @@ export class Account {
    */
   showLimit(tier = this.tier) {
     const canSignIn = this._me.auth && this._me.loginUrl;
-    this._modalTitle.textContent = "Thanks for chatting!";
+    this._modalTitle.textContent = "感谢与我们对话！";
     if (tier === "anon") {
       this._modalMsg.textContent =
-        "Guest conversations run for 5 minutes. Sign in with Hugging Face to get 10 minutes a day for free, and PRO members chat with no limit at all.";
-      this._modalNote.textContent = "Your free minutes refresh tomorrow.";
+        "访客每次可对话 5 分钟。登录 Hugging Face 后每天可免费使用 10 分钟，PRO 会员不限时长。";
+      this._modalNote.textContent = "免费时长将于明天刷新。";
       if (canSignIn) {
-        this._modalCta.innerHTML = `${HF_MARK}<span>Sign in with Hugging Face</span>`;
+        this._modalCta.innerHTML = `${HF_MARK}<span>使用 Hugging Face 登录</span>`;
         this._modalCta.href = /** @type {string} */ (this._me.loginUrl);
         this._modalCta.hidden = false;
       } else {
@@ -172,9 +172,9 @@ export class Account {
     } else {
       // Signed-in, non-PRO.
       this._modalMsg.textContent =
-        "You've enjoyed your 10 minutes for today. Go PRO for unlimited conversations and to support open source AI.";
-      this._modalNote.textContent = "Or come back tomorrow. Your minutes reset daily.";
-      this._modalCta.innerHTML = "<span>Upgrade to PRO</span>";
+        "今日 10 分钟免费时长已用完。升级到 PRO 可无限对话，并支持开源 AI。";
+      this._modalNote.textContent = "也可以明天再来，使用时长每天重置。";
+      this._modalCta.innerHTML = "<span>升级到 PRO</span>";
       this._modalCta.href = PRO_URL;
       this._modalCta.hidden = false;
     }
@@ -198,12 +198,12 @@ export class Account {
       loginUrl: url,
     };
     this._render();
-    this._modalTitle.textContent = "Sign in again";
+    this._modalTitle.textContent = "请重新登录";
     this._modalMsg.textContent =
-      "Your Hugging Face session expired or was revoked. Sign in again to start a conversation.";
-    this._modalNote.textContent = "This keeps your account and conversation time secure.";
+      "Hugging Face 会话已过期或被撤销。请重新登录后开始对话。";
+    this._modalNote.textContent = "这有助于保护你的账号和对话时长。";
     if (url) {
-      this._modalCta.innerHTML = `${HF_MARK}<span>Sign in with Hugging Face</span>`;
+      this._modalCta.innerHTML = `${HF_MARK}<span>使用 Hugging Face 登录</span>`;
       this._modalCta.href = url;
       this._modalCta.hidden = false;
     } else {
@@ -215,10 +215,10 @@ export class Account {
   /** Show a warm "we're at capacity" message when even the waiting line is full.
    *  Reuses the limit modal shell; no call-to-action, just reassurance. */
   showBusy() {
-    this._modalTitle.textContent = "Hugged to the limit 🤗";
+    this._modalTitle.textContent = "当前服务繁忙 🤗";
     this._modalMsg.textContent =
-      "Every slot and the whole line are full right now. Too much love! Grab a coffee and pop back in a minute.";
-    this._modalNote.textContent = "A spot usually opens up within a few minutes.";
+      "当前所有对话席位和等待队列都已满，请稍后再试。";
+    this._modalNote.textContent = "通常几分钟内就会有空位。";
     this._modalCta.hidden = true;
     if (!this._modal.open) this._modal.showModal();
   }

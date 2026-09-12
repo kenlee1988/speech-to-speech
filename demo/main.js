@@ -17,14 +17,15 @@
  * @typedef {S2sRealtimeClient} RealtimeClient
  */
 
-import { S2sRealtimeClient } from "./s2s-realtime-client.js?v=avatar-v1";
-import { $, truncateError, DEBUG } from "./ui/dom.js";
-import { ChatView } from "./ui/chat.js";
-import { Account } from "./ui/account.js";
-import { AvatarView } from "./ui/avatar.js?v=avatar-v1";
+import { S2sRealtimeClient } from "./s2s-realtime-client.js?v=zh-cn-v1";
+import { $, truncateError, DEBUG } from "./ui/dom.js?v=zh-cn-v1";
+import { ChatView } from "./ui/chat.js?v=zh-cn-v1";
+import { Account } from "./ui/account.js?v=zh-cn-v1";
+import { AvatarView } from "./ui/avatar.js?v=zh-cn-v1";
 
 const DEFAULT_VOICE = "Aiden";
-const DEFAULT_INSTRUCTIONS = "You are a friendly voice assistant.";
+const DEFAULT_INSTRUCTIONS = "你是一位友好的中文语音助手。请始终使用中文简洁回答。";
+const LEGACY_DEFAULT_INSTRUCTIONS = "You are a friendly voice assistant.";
 
 const STORAGE_KEYS = {
   // Direct s2s server URL, used only when the deploy has no LOAD_BALANCER_URL
@@ -109,10 +110,13 @@ const SNAPSHOT_LADDER = /** @type {[number, number][]} */ ([
 ]);
 
 function loadSettings() {
+  const savedInstructions = localStorage.getItem(STORAGE_KEYS.instructions);
   return {
     directUrl: localStorage.getItem(STORAGE_KEYS.directUrl) || "",
     voice: localStorage.getItem(STORAGE_KEYS.voice) || DEFAULT_VOICE,
-    instructions: localStorage.getItem(STORAGE_KEYS.instructions) || DEFAULT_INSTRUCTIONS,
+    instructions: !savedInstructions || savedInstructions === LEGACY_DEFAULT_INSTRUCTIONS
+      ? DEFAULT_INSTRUCTIONS
+      : savedInstructions,
     noiseGate: loadGateThreshold(),
     // Default WebSocket: the proven path stays the first-run experience.
     transport: localStorage.getItem(STORAGE_KEYS.transport) === "webrtc" ? "webrtc" : "ws",
@@ -170,15 +174,15 @@ function saveTools() {
 
 /** @type {Record<AppState, { caption: string; disabled: boolean }>} */
 const STATE_VIEWS = {
-  idle:            { caption: "Tap to start",  disabled: false },
-  connecting:      { caption: "Connecting",    disabled: true  },
-  queued:          { caption: "Finding you a spot…", disabled: true },
-  "your-turn":     { caption: "You're up! 🎉", disabled: true  },
+  idle:            { caption: "点击开始",  disabled: false },
+  connecting:      { caption: "正在连接",    disabled: true  },
+  queued:          { caption: "正在排队……", disabled: true },
+  "your-turn":     { caption: "轮到你了！🎉", disabled: true  },
   listening:       { caption: "",              disabled: false },
   "user-speaking": { caption: "",              disabled: false },
   processing:      { caption: "",              disabled: false },
   "ai-speaking":   { caption: "",              disabled: false },
-  error:           { caption: "Tap to retry",  disabled: false },
+  error:           { caption: "点击重试",  disabled: false },
 };
 
 /** @type {Record<AppState, string>} */
@@ -216,11 +220,15 @@ const joinQueueBtn = $("#join-queue-btn");
 /** @type {HTMLButtonElement} */
 const leaveQueueBtn = $("#leave-queue-btn");
 /** @type {HTMLElement} */
+const appRoot = $("#app");
+/** @type {HTMLElement} */
 const avatarPanel = $("#avatar-panel");
 /** @type {HTMLVideoElement} */
 const avatarVideo = $("#avatar-video");
 /** @type {HTMLElement} */
 const avatarStatus = $("#avatar-status");
+/** @type {HTMLButtonElement} */
+const avatarFullscreenBtn = $("#avatar-fullscreen");
 
 /** @type {HTMLButtonElement} */
 const settingsBtn = $("#settings-btn");
@@ -318,6 +326,23 @@ avatarView.addEventListener("disconnected", () => {
   avatarAudioActive = false;
   client?.setOutputMuted(false);
 });
+
+function syncFullscreenButton() {
+  const active = document.fullscreenElement === appRoot;
+  avatarFullscreenBtn.classList.toggle("active", active);
+  avatarFullscreenBtn.title = active ? "退出全屏" : "进入全屏";
+  avatarFullscreenBtn.setAttribute("aria-label", avatarFullscreenBtn.title);
+}
+
+avatarFullscreenBtn.addEventListener("click", async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await appRoot.requestFullscreen();
+  } catch (error) {
+    console.warn("[main] fullscreen request failed:", error);
+  }
+});
+document.addEventListener("fullscreenchange", syncFullscreenButton);
 
 // ── Connection target ────────────────────────────────────────────────────────
 // Three modes, decided by the deploy via /api/config:
@@ -447,7 +472,7 @@ function setState(next) {
   // Warm reassurance under the terse position, only while waiting in line.
   if (next === "queued") {
     circleSubcaption.textContent =
-      "Sorry, we overhugged! 🤗 Every slot is busy, so we saved you a spot. Hang tight, you're moving up.";
+      "抱歉，当前服务繁忙 🤗 已为你保留位置，请稍候。";
     circleSubcaption.hidden = false;
   } else {
     circleSubcaption.hidden = true;
@@ -464,8 +489,8 @@ function updateRestartAvailability() {
     currentState === "connecting" || currentState === "queued" || currentState === "your-turn";
   restartHint.hidden = false;
   restartHint.textContent = LIVE_STATES.has(currentState)
-    ? "Reconnects now with the settings above."
-    : "Starts a conversation with the settings above.";
+    ? "立即使用上述设置重新连接。"
+    : "使用上述设置开始对话。";
 }
 
 /**
@@ -570,7 +595,7 @@ function setGateThreshold(db) {
   settings.noiseGate = Math.min(GATE_MAX_DB, Math.max(GATE_OFF_DB, Math.round(db)));
   const off = settings.noiseGate <= GATE_OFF_DB;
   inputNoiseGate.value = String(settings.noiseGate);
-  gateValue.textContent = off ? "Off" : `${settings.noiseGate} dB`;
+  gateValue.textContent = off ? "关闭" : `${settings.noiseGate} dB`;
   renderGateHandle();
   localStorage.setItem(STORAGE_KEYS.noiseGate, String(settings.noiseGate));
   if (client && LIVE_STATES.has(currentState)) {
@@ -582,7 +607,7 @@ function setGateThreshold(db) {
 function syncGateUi() {
   inputNoiseGate.value = String(settings.noiseGate);
   const off = settings.noiseGate <= GATE_OFF_DB;
-  gateValue.textContent = off ? "Off" : `${settings.noiseGate} dB`;
+  gateValue.textContent = off ? "关闭" : `${settings.noiseGate} dB`;
   renderGateHandle();
 }
 
@@ -642,16 +667,16 @@ function syncToolsUi() {
   if (serverSearchKey) {
     // Key lives server-side: show it as configured, never expose it.
     searchKeyInput.value = "";
-    searchKeyInput.placeholder = "••••••••  · provided by the server";
+    searchKeyInput.placeholder = "••••••••  · 由服务器提供";
     searchKeyInput.disabled = true;
-    toolWebHint.textContent = "Ready. The search key is held server-side and never sent to your browser.";
+    toolWebHint.textContent = "已就绪。搜索密钥保存在服务器端，不会发送到浏览器。";
   } else {
     searchKeyInput.disabled = false;
     searchKeyInput.value = userSearchKey;
-    searchKeyInput.placeholder = "Paste a Serper key to enable web search";
+    searchKeyInput.placeholder = "粘贴 Serper 密钥以启用网页搜索";
     toolWebHint.textContent = userSearchKey
-      ? "Using your key — stored in this browser only."
-      : "No server key configured. Add your own Serper key to enable web search.";
+      ? "正在使用你的密钥，仅保存在当前浏览器中。"
+      : "服务器未配置密钥。请添加自己的 Serper 密钥以启用搜索。";
   }
 }
 
@@ -681,16 +706,16 @@ toolCamSwitch.addEventListener("change", async () => {
       toolCamSwitch.checked = false;
       const denied = err instanceof Error && (err.name === "NotAllowedError" || err.name === "SecurityError");
       toolCamHint.textContent = denied
-        ? "Camera blocked. Allow it from the camera icon in your browser's address bar — it switches on automatically."
+        ? "摄像头权限已被禁止。请在浏览器地址栏中允许摄像头，随后将自动开启。"
         : `Camera unavailable${err instanceof Error ? `: ${err.message}` : ""}`;
       return;
     }
     toolsEnabled.camera_snapshot = true;
-    toolCamHint.textContent = "Camera on. The assistant can take a snapshot when it needs to see.";
+    toolCamHint.textContent = "摄像头已开启。助手可在需要时获取画面。";
   } else {
     disableCamera();
     toolsEnabled.camera_snapshot = false;
-    toolCamHint.textContent = "Let the assistant see through your webcam.";
+    toolCamHint.textContent = "允许助手通过摄像头看到画面。";
   }
   saveTools();
   pushToolsToSession();
@@ -713,8 +738,8 @@ searchKeyInput.addEventListener("input", () => {
     pushToolsToSession();
   }
   toolWebHint.textContent = userSearchKey
-    ? "Using your key — stored in this browser only."
-    : "No server key configured. Add your own Serper key to enable web search.";
+    ? "正在使用你的密钥，仅保存在当前浏览器中。"
+    : "服务器未配置密钥。请添加自己的 Serper 密钥以启用搜索。";
 });
 
 // ── Camera ──────────────────────────────────────────────────────────────────
@@ -864,18 +889,18 @@ async function runTool(name, argsJson, callId) {
       const dataUrl = captureSnapshot();
       if (dataUrl) {
         if (DEBUG) console.debug(`[tool] camera_snapshot captured frame (${dataUrl.length} chars), sending image + output`);
-        result = { output: "Snapshot captured from the webcam and attached as an image.", image: dataUrl };
+        result = { output: "已从摄像头获取画面并作为图像附上。", image: dataUrl };
         flashPreview();
       } else {
         console.warn("[tool] camera_snapshot: no frame — camera off or not ready");
-        result.output = "The camera is not available right now.";
+        result.output = "当前无法使用摄像头。";
       }
     } else {
-      result.output = `Unknown tool: ${name}`;
+      result.output = `未知工具：${name}`;
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    result.output = `Tool failed: ${msg}`;
+    result.output = `工具执行失败：${msg}`;
   }
   return result;
 }
@@ -896,15 +921,15 @@ async function execWebSearch(query) {
   if (!res.ok) {
     let detail = String(res.status);
     try { const j = await res.json(); if (j.detail) detail = j.detail; } catch {}
-    throw new Error(`search error (${detail})`);
+    throw new Error(`搜索失败（${detail}）`);
   }
   const json = await res.json();
   // Date-stamp the header so the model treats these as fresh realtime facts
   // rather than its (older) training knowledge.
   const today = new Date().toISOString().slice(0, 10);
   /** @type {string[]} */
-  const lines = [`Google search result from ${today}:`];
-  if (json.answer) lines.push(`Answer: ${json.answer}`);
+  const lines = [`${today} 的 Google 搜索结果：`];
+  if (json.answer) lines.push(`答案：${json.answer}`);
   for (const r of json.results || []) {
     lines.push(`- ${r.title}: ${r.snippet} (${r.url})`);
   }
@@ -961,7 +986,7 @@ function connectionTarget() {
   }
   const directUrl = buildDirectWsUrl(pinnedUrl || settings.directUrl);
   if (!directUrl) {
-    throw new Error("Enter a speech-to-speech server URL in Settings.");
+    throw new Error("请在设置中填写实时语音服务器地址。");
   }
   return { directUrl };
 }
@@ -1059,7 +1084,7 @@ function syncTransportUi() {
   inputTransport.disabled = !selectable;
   inputTransport.value = selectable && settings.transport === "webrtc" ? "webrtc" : "ws";
   transportHint.textContent = selectable
-    ? "How audio travels to the server. Applies on the next conversation."
+    ? "选择音频传输到服务器的方式，下次对话时生效。"
     : "WebRTC needs a server URL pinned by the deployment (SPEECH_TO_SPEECH_URL).";
   gateField.hidden = effectiveTransport() === "webrtc";
 }
@@ -1073,7 +1098,7 @@ function syncConnectionUi() {
     inputLbUrl.value = pinnedUrl;
     inputLbUrl.readOnly = true;
     connHint.classList.remove("error");
-    connHint.textContent = "Speech-to-speech server URL pinned by this deployment.";
+    connHint.textContent = "实时语音服务器地址已由当前部署固定。";
   } else if (allowDirect) {
     // Direct mode: the user sets their own s2s server URL.
     connField.hidden = false;
@@ -1082,7 +1107,7 @@ function syncConnectionUi() {
     inputLbUrl.placeholder = "http://localhost:port";
     connHint.classList.remove("error");
     connHint.textContent =
-      "URL of your speech-to-speech server, e.g. http://localhost:8080 (the app adds /v1/realtime).";
+      "请填写实时语音服务器地址，例如 http://localhost:8080（系统会自动添加 /v1/realtime）。";
   } else {
     // LB mode: the load balancer URL is deployment-owned — hide it entirely so
     // its address is never exposed in Settings.
@@ -1095,7 +1120,9 @@ function syncAvatarUi() {
   avatarField.hidden = !avatarAvailable;
   avatarHint.hidden = !avatarAvailable;
   inputAvatarEnabled.checked = settings.avatarEnabled;
-  avatarPanel.hidden = !(avatarAvailable && (settings.avatarEnabled || avatarAudioActive));
+  const avatarVisible = avatarAvailable && (settings.avatarEnabled || avatarAudioActive);
+  avatarPanel.hidden = !avatarVisible;
+  document.body.classList.toggle("avatar-active", avatarVisible);
 }
 
 /** True when the user must supply a server URL before connecting (direct mode
@@ -1108,7 +1135,7 @@ function missingServerUrl() {
 function promptServerUrl() {
   if (settingsModal.open) syncConnectionUi();
   else openSettings();
-  connHint.textContent = "Set the speech-to-speech server URL to start.";
+  connHint.textContent = "请先设置实时语音服务器地址。";
   connHint.classList.add("error");
   inputLbUrl.focus();
 }
@@ -1188,7 +1215,7 @@ async function handleStartError(err) {
   if (err && err.code === "login-required") {
     await teardown();
     setState("error");
-    setCaption("Sign in again to continue.", "error");
+    setCaption("请重新登录后继续。", "error");
     account.showLoginRequired(err.loginUrl);
     return;
   }
@@ -1213,8 +1240,8 @@ async function handleStartError(err) {
     setState("error");
     setCaption(
       err.code === "join-expired"
-        ? "Your spot expired. Tap to rejoin."
-        : "That took a while. Tap to rejoin.",
+        ? "你的位置已过期，点击重新排队。"
+        : "等待时间较长，点击重新排队。",
       "error",
     );
     return;
@@ -1227,8 +1254,8 @@ micBtn.addEventListener("click", () => {
   micMuted = !micMuted;
   syncMicMuteState();
   micBtn.classList.toggle("muted", micMuted);
-  micBtn.setAttribute("aria-label", micMuted ? "Unmute" : "Mute");
-  micBtn.title = micMuted ? "Unmute" : "Mute";
+  micBtn.setAttribute("aria-label", micMuted ? "取消静音" : "静音");
+  micBtn.title = micMuted ? "取消静音" : "静音";
 });
 
 stopBtn.addEventListener("click", async () => {
@@ -1279,8 +1306,8 @@ async function refreshAudioDeviceLists() {
   const canPickOutput = supportsAudioOutputSelection();
   inputAudioOutput.disabled = !canPickOutput;
   audioOutputHint.textContent = canPickOutput
-    ? "Where assistant audio plays. Can change live while connected."
-    : "Speaker selection needs a browser with AudioContext.setSinkId (Chrome/Edge).";
+    ? "选择助手语音的播放设备，连接期间也可随时更改。"
+    : "选择扬声器需要浏览器支持 AudioContext.setSinkId（Chrome/Edge）。";
 
   /** @type {MediaDeviceInfo[]} */
   let devices = [];
@@ -1294,8 +1321,8 @@ async function refreshAudioDeviceLists() {
   const outputs = devices.filter((d) => d.kind === "audiooutput");
   const labelsReady = devices.some((d) => d.label);
 
-  fillDeviceSelect(inputAudioInput, inputs, settings.audioInputId, "Microphone");
-  fillDeviceSelect(inputAudioOutput, outputs, settings.audioOutputId, "Speaker");
+  fillDeviceSelect(inputAudioInput, inputs, settings.audioInputId, "麦克风");
+  fillDeviceSelect(inputAudioOutput, outputs, settings.audioOutputId, "扬声器");
 
   if (!labelsReady) {
     // Permission unlocks real device names; keep it quiet — user can tap Start
@@ -1303,11 +1330,11 @@ async function refreshAudioDeviceLists() {
     const hint = inputAudioInput.parentElement?.querySelector("small");
     if (hint) {
       hint.textContent =
-        "Allow microphone access (tap Start once) to see device names. Mic changes apply on Restart.";
+        "允许麦克风权限（点击一次开始）后才能查看设备名称。麦克风更改将在重新开始后生效。";
     }
   } else {
     const hint = inputAudioInput.parentElement?.querySelector("small");
-    if (hint) hint.textContent = "Applies on the next conversation (or Restart).";
+    if (hint) hint.textContent = "下次对话或重新开始时生效。";
   }
 }
 
@@ -1322,7 +1349,7 @@ function fillDeviceSelect(select, devices, selectedId, fallbackLabel) {
   select.replaceChildren();
   const def = document.createElement("option");
   def.value = "";
-  def.textContent = "System default";
+  def.textContent = "系统默认";
   select.appendChild(def);
   devices.forEach((d, i) => {
     const opt = document.createElement("option");
@@ -1335,7 +1362,7 @@ function fillDeviceSelect(select, devices, selectedId, fallbackLabel) {
   if (prev && ![...select.options].some((o) => o.value === prev)) {
     const missing = document.createElement("option");
     missing.value = prev;
-    missing.textContent = `${fallbackLabel} (saved, not found)`;
+    missing.textContent = `${fallbackLabel}（已保存，但未找到）`;
     select.appendChild(missing);
   }
   select.value = prev;
@@ -1357,7 +1384,7 @@ async function primeMicPermission() {
     for (const track of s.getTracks()) track.stop();
   } catch (err) {
     throw new Error(
-      `Microphone access denied${err instanceof Error ? `: ${err.message}` : ""}`,
+      `麦克风权限被拒绝${err instanceof Error ? `：${err.message}` : ""}`,
     );
   }
 }
@@ -1372,7 +1399,7 @@ async function acquireMicStream() {
 /** @param {number} position Update the queued caption ("You're #N in line"). */
 function onQueuePosition(position) {
   const n = Number(position) || 0;
-  setCaption(n > 0 ? `You're #${n} in line` : "Finding you a spot…", "muted");
+  setCaption(n > 0 ? `当前排在第 ${n} 位` : "正在排队……", "muted");
 }
 
 // ── "Your turn" join countdown ──────────────────────────────────────────────
@@ -1385,14 +1412,14 @@ function startJoinCountdown(sec) {
   stopJoinCountdown();
   let left = Math.max(0, Math.floor(sec));
   const paint = () => {
-    joinQueueBtn.textContent = left > 0 ? `Join now (${left}s)` : "Join now";
+    joinQueueBtn.textContent = left > 0 ? `立即加入（${left} 秒）` : "立即加入";
   };
   paint();
   joinCountdownTimer = window.setInterval(() => {
     left -= 1;
     if (left <= 0) {
       stopJoinCountdown();
-      joinQueueBtn.textContent = "Join now";
+      joinQueueBtn.textContent = "立即加入";
       return;
     }
     paint();
@@ -1427,7 +1454,7 @@ async function doStart(audioContext = null) {
   chat.clear();
   chat.reset();
   setState("connecting");
-  setCaption("Asking for mic…", "muted");
+  setCaption("正在请求麦克风权限……", "muted");
 
   // Create + resume the AudioContext SYNCHRONOUSLY, still inside the gesture.
   // iOS Safari only starts an AudioContext from a user gesture; if we waited
@@ -1448,7 +1475,7 @@ async function doStart(audioContext = null) {
 
   avatarAudioActive = false;
   if (avatarAvailable && settings.avatarEnabled && audioContext) {
-    setCaption("Connecting avatar…", "muted");
+    setCaption("正在连接虚拟人……", "muted");
     try {
       await avatarView.connect(audioContext, "/api/avatar/offer", avatarIceServers);
       avatarAudioActive = true;

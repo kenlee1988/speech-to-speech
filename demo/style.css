@@ -19,7 +19,7 @@
   /* Mono is the "machine voice": reserved for system text the app emits —
    * the orb's status caption, tool calls, the transport tag. Body/UI stays
    * Inter. */
-  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --font-mono: "Geist Mono", "Noto Sans SC", "Microsoft YaHei", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 
   /* Thesis: color belongs to the voice. The chrome is monochrome; saturated
    * hue appears only on the orb and on these tiny role echoes, which mirror
@@ -61,7 +61,7 @@ body {
 }
 
 body {
-  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: radial-gradient(ellipse at 50% 20%, #1a1c28 0%, var(--bg) 60%);
   color: var(--text);
   min-height: 100vh;
@@ -612,6 +612,37 @@ a:hover {
   object-fit: contain;
   background: #08090c;
 }
+.avatar-fullscreen {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  background: rgba(8, 9, 12, 0.68);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.avatar-fullscreen:hover {
+  background: rgba(26, 29, 40, 0.88);
+}
+.avatar-fullscreen svg {
+  width: 18px;
+  height: 18px;
+}
+.avatar-fullscreen .fullscreen-exit,
+.avatar-fullscreen.active .fullscreen-enter {
+  display: none;
+}
+.avatar-fullscreen.active .fullscreen-exit {
+  display: block;
+}
 .avatar-status-wrap {
   position: absolute;
   left: 12px;
@@ -655,6 +686,128 @@ a:hover {
 }
 
 /* ─── Central circle ──────────────────────────────────────────────────── */
+
+/* Immersive avatar mode: the incoming video owns the viewport while the
+ * conversation controls remain reachable as a compact overlay. */
+body.avatar-active {
+  overflow: hidden;
+  background: #08090c;
+}
+body.avatar-active #app {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+  background: #08090c;
+}
+body.avatar-active .topbar {
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  left: 0;
+  right: 0;
+  color: #fff;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.66), transparent);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
+}
+body.avatar-active .stage {
+  position: absolute;
+  inset: 0;
+  display: block;
+  padding: 0;
+}
+body.avatar-active .stage-layout {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+}
+body.avatar-active .avatar-panel {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+body.avatar-active .avatar-panel::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 50%, rgba(0, 0, 0, 0.58) 100%),
+    linear-gradient(to right, rgba(0, 0, 0, 0.12), transparent 25%, transparent 75%, rgba(0, 0, 0, 0.12));
+}
+body.avatar-active .avatar-panel video {
+  object-fit: cover;
+  object-position: center 20%;
+}
+body.avatar-active .avatar-status-wrap,
+body.avatar-active .avatar-fullscreen {
+  bottom: max(64px, calc(env(safe-area-inset-bottom) + 48px));
+}
+body.avatar-active .avatar-status-wrap {
+  z-index: 3;
+}
+body.avatar-active .voice-stage {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: max(58px, calc(env(safe-area-inset-bottom) + 42px));
+  transform: translateX(-50%);
+  gap: 8px;
+}
+body.avatar-active .circle {
+  width: clamp(84px, 10vw, 112px);
+}
+body.avatar-active .circle-caption,
+body.avatar-active .circle-subcaption,
+body.avatar-active .queue-actions {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(8, 9, 12, 0.64);
+  backdrop-filter: blur(8px);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+}
+body.avatar-active .footer {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+
+@media (max-width: 800px) {
+  body.avatar-active .stage-layout {
+    display: block;
+  }
+  body.avatar-active .avatar-panel {
+    width: 100%;
+    max-height: none;
+  }
+  body.avatar-active .voice-stage {
+    width: min(92vw, 420px);
+  }
+  body.avatar-active .avatar-status-wrap {
+    bottom: max(58px, calc(env(safe-area-inset-bottom) + 42px));
+  }
+  body.avatar-active .avatar-fullscreen {
+    top: max(76px, calc(env(safe-area-inset-top) + 64px));
+    bottom: auto;
+  }
+}
 
 /* Wraps the orb and its two side controls so they stay aligned on one row. */
 .orb-wrap {

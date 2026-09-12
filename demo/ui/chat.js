@@ -16,11 +16,19 @@
  *     can be marked interrupted without erasing what was already shown.
  */
 
-import { $, escHtml, DEBUG } from "./dom.js";
+import { $, escHtml, DEBUG } from "./dom.js?v=zh-cn-v1";
 
 const WRENCH_PATH = `<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>`;
 const CHAT_BUBBLE_SVG = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
-const EMPTY_STATE_HTML = `<div id="chat-empty" class="chat-empty">${CHAT_BUBBLE_SVG}<span class="chat-empty-title">No messages yet</span><span class="chat-empty-hint">Tap the orb and start talking</span></div>`;
+const EMPTY_STATE_HTML = `<div id="chat-empty" class="chat-empty">${CHAT_BUBBLE_SVG}<span class="chat-empty-title">暂无消息</span><span class="chat-empty-hint">点击圆球开始对话</span></div>`;
+const TOOL_NAMES = {
+  web_search: "网页搜索",
+  camera_snapshot: "摄像头快照",
+};
+
+function toolDisplayName(name) {
+  return TOOL_NAMES[name] || name;
+}
 
 export class ChatView {
   /**
@@ -133,7 +141,7 @@ export class ChatView {
   _buildMessageEl({ container, prefix, role, text, partial = false }) {
     const el = document.createElement("div");
     el.className = `${container} ${role}`;
-    const label = role === "user" ? "You" : "Assistant";
+    const label = role === "user" ? "你" : "助手";
     el.innerHTML = `<div class="${prefix}-role">${label}</div><div class="${prefix}-body${partial ? " partial" : ""}"${text ? "" : " hidden"}>${escHtml(text)}</div>`;
     return el;
   }
@@ -192,7 +200,7 @@ export class ChatView {
     el.classList.toggle("listening", state === "listening");
     el.classList.toggle("sending", state === "sending");
     const label = el.querySelector(".voice-turn-state");
-    if (label) label.textContent = state === "listening" ? "Listening…" : "Sending voice…";
+    if (label) label.textContent = state === "listening" ? "正在倾听……" : "正在发送语音……";
   }
 
   /** @param {HTMLElement} el @param {string} text */
@@ -358,21 +366,26 @@ export class ChatView {
     const empty = this._chatHistory.querySelector(".chat-empty");
     if (empty) empty.remove();
     let pretty = argsJson;
-    try { pretty = JSON.stringify(JSON.parse(argsJson), null, 2); } catch {}
+    try {
+      const args = JSON.parse(argsJson);
+      if (name === "web_search" && args.query) pretty = `搜索内容：${args.query}`;
+      else if (name === "camera_snapshot") pretty = "无需输入";
+      else pretty = JSON.stringify(args, null, 2);
+    } catch {}
     const el = document.createElement("div");
     el.className = "hist-msg tool";
     el.innerHTML = `
-      <div class="hist-role">Tool call</div>
+      <div class="hist-role">工具调用</div>
       <button class="hist-tool-header" aria-expanded="false">
         <svg class="hist-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${WRENCH_PATH}</svg>
-        <span class="hist-tool-name">${escHtml(name)}</span>
+        <span class="hist-tool-name">${escHtml(toolDisplayName(name))}</span>
         <svg class="hist-tool-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="hist-tool-body">
-        <div class="hist-tool-label">Input</div>
+        <div class="hist-tool-label">输入</div>
         <div class="hist-tool-block">${escHtml(pretty)}</div>
-        <div class="hist-tool-label">Output</div>
-        <div class="hist-tool-block hist-tool-output">${escHtml(output || "(no output)")}</div>
+        <div class="hist-tool-label">输出</div>
+        <div class="hist-tool-block hist-tool-output">${escHtml(output || "（无输出）")}</div>
       </div>
     `;
     const header = /** @type {HTMLButtonElement} */ (el.querySelector(".hist-tool-header"));
@@ -393,7 +406,7 @@ export class ChatView {
     hist.classList.add("interrupted");
     const note = document.createElement("div");
     note.className = "hist-note";
-    note.textContent = "Interrupted";
+    note.textContent = "已中断";
     hist.appendChild(note);
   }
 
@@ -404,7 +417,7 @@ export class ChatView {
     if (empty) empty.remove();
     const el = document.createElement("div");
     el.className = "hist-msg tool";
-    el.innerHTML = `<div class="hist-role">Snapshot</div><img class="hist-image" alt="Webcam snapshot sent to the model" />`;
+    el.innerHTML = `<div class="hist-role">摄像头快照</div><img class="hist-image" alt="已发送给模型的摄像头快照" />`;
     const img = /** @type {HTMLImageElement} */ (el.querySelector("img"));
     img.src = dataUrl;
     this._chatHistory.appendChild(el);
@@ -544,8 +557,8 @@ export class ChatView {
       container = document.createElement("div");
       container.className = "hist-audio";
       container.innerHTML = `
-        <div class="hist-audio-label">Audio sent to the model</div>
-        <audio controls preload="metadata" aria-label="Replay your audio"></audio>
+        <div class="hist-audio-label">已发送给模型的语音</div>
+        <audio controls preload="metadata" aria-label="重播你的语音"></audio>
       `;
       hist.appendChild(container);
     }
@@ -563,13 +576,13 @@ export class ChatView {
     this._userAudioByItem.set(id, { audio, url });
     audio.src = url;
     audio.title = detail.truncated
-      ? "Replay your audio (the beginning was no longer buffered)"
-      : "Replay the audio sent to the model";
+      ? "重播你的语音（开头部分已不在缓冲区）"
+      : "重播已发送给模型的语音";
     const label = container.querySelector(".hist-audio-label");
     if (label) {
       label.textContent = detail.truncated
-        ? "Audio sent to the model · beginning unavailable"
-        : "Audio sent to the model";
+        ? "已发送给模型的语音 · 开头部分不可用"
+        : "已发送给模型的语音";
     }
 
     if (isNewPlayer) {
@@ -631,7 +644,7 @@ export class ChatView {
   /** The model called a tool — show an ephemeral "running" bubble.
    *  @param {string} name */
   onToolCall(name) {
-    this._bumpDismiss(this._spawnBubble("tool", name));
+    this._bumpDismiss(this._spawnBubble("tool", toolDisplayName(name)));
     this._markUnread();
   }
 
