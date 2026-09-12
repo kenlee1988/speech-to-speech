@@ -617,3 +617,11 @@ def test_openai_api_key_is_not_sent_to_other_endpoints(monkeypatch):
     assert local_handler.api_key is None
     assert official_handler.api_key == "official-secret"
     assert explicit_handler.api_key == "endpoint-secret"
+
+
+def test_openai_stt_uses_endpoint_specific_environment_key(monkeypatch):
+    monkeypatch.setenv("OPENAI_STT_API_KEY", "stt-secret")
+
+    handler = _handler(monkeypatch, base_url="https://transcription.example/v1")
+
+    assert handler.api_key == "stt-secret"

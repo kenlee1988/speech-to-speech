@@ -20,6 +20,7 @@ from openai.types.realtime import (
     SessionUpdateEvent,
 )
 
+from speech_to_speech.api.openai_realtime.livetalking_bridge import bridge_from_env
 from speech_to_speech.api.openai_realtime.llm_proxy import LLMProxyConfig, mount_llm_proxy
 from speech_to_speech.api.openai_realtime.pipeline_unit import PipelineUnit, SessionState
 from speech_to_speech.api.openai_realtime.service import (
@@ -500,8 +501,12 @@ def create_app(
     stop_event: ThreadingEvent,
     llm_proxy_config: LLMProxyConfig | None = None,
 ) -> FastAPI:
+    livetalking_bridge = bridge_from_env()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        if livetalking_bridge is not None:
+            await livetalking_bridge.start()
         # One send loop per pipeline unit; each polls its own queues and forwards
         # to the websocket currently attached via unit.session.
         send_tasks = [asyncio.create_task(_send_loop_for(unit)) for unit in pool]
@@ -520,6 +525,8 @@ def create_app(
                     await sess.transport.close()
                 except Exception:
                     pass
+        if livetalking_bridge is not None:
+            await livetalking_bridge.close()
 
     app = FastAPI(lifespan=lifespan)
 
@@ -1078,6 +1085,8 @@ def create_app(
                             bytes(audio_batch),
                             response_key,
                         )
+                        if livetalking_bridge is not None:
+                            livetalking_bridge.enqueue(bytes(audio_batch))
                 except Empty:
                     pass
 

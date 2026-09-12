@@ -147,6 +147,22 @@ def test_openai_tts_warmup_uses_configured_request(monkeypatch):
     assert operation.cancelled is False
 
 
+def test_openai_tts_prefers_endpoint_specific_environment_key(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "shared-secret")
+    monkeypatch.setenv("OPENAI_TTS_API_KEY", "tts-secret")
+    handler = _openai_tts_handler(monkeypatch)
+
+    assert handler.api_key == "tts-secret"
+
+
+def test_openai_tts_does_not_send_shared_key_to_custom_endpoint(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "llm-secret")
+    monkeypatch.delenv("OPENAI_TTS_API_KEY", raising=False)
+    handler = _openai_tts_handler(monkeypatch)
+
+    assert handler.api_key is None
+
+
 def test_openai_tts_warmup_http_failure_aborts_construction(monkeypatch):
     transport = tts_module.httpx.MockTransport(lambda request: tts_module.httpx.Response(404, request=request))
     client = tts_module.httpx.AsyncClient(transport=transport)

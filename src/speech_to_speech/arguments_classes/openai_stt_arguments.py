@@ -13,8 +13,8 @@ class OpenAICompatibleSTTHandlerArguments:
     openai_stt_api_key: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Optional bearer token. For https://api.openai.com/v1 only, "
-            "OPENAI_API_KEY is used when this flag is unset."
+            "help": "Optional bearer token. When unset, OPENAI_STT_API_KEY is used; "
+            "the official OpenAI URL also falls back to OPENAI_API_KEY."
         },
     )
     openai_stt_model: Optional[str] = field(

@@ -71,6 +71,16 @@
       </header>
 
       <main class="stage">
+        <div class="stage-layout">
+          <section id="avatar-panel" class="avatar-panel" aria-label="Live avatar" hidden>
+            <video id="avatar-video" autoplay playsinline muted></video>
+            <div class="avatar-status-wrap">
+              <span class="avatar-status-dot" aria-hidden="true"></span>
+              <span id="avatar-status">Avatar idle</span>
+            </div>
+          </section>
+
+          <div class="voice-stage">
         <div class="orb-wrap">
           <div id="mic-gate" class="mic-gate">
             <svg id="mic-gate-arc" class="mic-gate-arc" viewBox="0 0 100 100" aria-hidden="true">
@@ -140,6 +150,8 @@
           <button id="leave-queue-btn" class="leave-queue-btn" type="button" hidden>
             Leave queue
           </button>
+        </div>
+          </div>
         </div>
       </main>
 
@@ -255,6 +267,18 @@
                 How audio travels to the server. Applies on the next conversation.
               </small>
             </label>
+
+            <div class="tool-row" id="avatar-field" hidden>
+              <div class="tool-info">
+                <span class="tool-name">Live avatar</span>
+                <span class="tool-desc">Show synchronized LiveTalking video and audio.</span>
+              </div>
+              <label class="switch">
+                <input id="avatar-enabled" type="checkbox" />
+                <span class="switch-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <small id="avatar-hint" class="tool-hint" hidden>Applies on the next conversation (or Restart).</small>
 
             <div class="field-row">
               <label class="field">
@@ -404,6 +428,6 @@
     </dialog>
 
     <script src="vendor/openai-realtime-agents.umd.js"></script>
-    <script type="module" src="main.js?v=audio-24k-v1"></script>
+    <script type="module" src="main.js?v=avatar-v1"></script>
   </body>
 </html>

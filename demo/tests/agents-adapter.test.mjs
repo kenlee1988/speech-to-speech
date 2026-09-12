@@ -6,6 +6,28 @@ import * as realtime from "@openai/agents/realtime";
 import { S2sRealtimeClient } from "../s2s-realtime-client.js";
 import { waitFor } from "./helpers.mjs";
 
+test("assistant output mute controls the single AudioContext gain path", () => {
+  globalThis.localStorage = { getItem() { return null; } };
+  const changes = [];
+  const client = new S2sRealtimeClient({
+    transport: "websocket",
+    directUrl: "ws://unused",
+    playAudio: false,
+  });
+  client._ctx = { currentTime: 12.5 };
+  client._outputGain = {
+    gain: {
+      setValueAtTime(value, time) { changes.push([value, time]); },
+    },
+  };
+
+  assert.equal(client._outputMuted, true);
+  client.setOutputMuted(false);
+
+  assert.equal(client._outputMuted, false);
+  assert.deepEqual(changes, [[1, 12.5]]);
+});
+
 test("the pinned SDK changes the live voice and explicitly clears all tools", async () => {
   globalThis.localStorage = { getItem() { return null; } };
   globalThis.OpenAIAgentsRealtime = realtime;

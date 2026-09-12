@@ -23,7 +23,8 @@ disabled entirely (no session proxy, no queue, no metering, no sign-in) and the
 browser connects directly to that URL, shown read-only in Settings.
 
 Endpoints:
-  GET  /api/config           -> { search, lb, allowDirect, s2sUrl, rtc, iceServers, auth }
+  GET  /api/config           -> browser-safe runtime feature flags
+  POST /api/avatar/offer     -> proxies WebRTC SDP to LiveTalking (when enabled)
   GET  /api/me               -> login + tier + remaining budget (LB mode only)
   POST /api/search           -> { results, answer }  Google via Serper.dev
   POST /api/calls            -> proxies the WebRTC SDP offer to <s2s>/v1/realtime/calls
@@ -77,6 +78,16 @@ LB_HF_TOKEN = os.environ.get("LB_HF_TOKEN", "").strip()
 SPEECH_TO_SPEECH_URL = os.environ.get("SPEECH_TO_SPEECH_URL", "").strip()
 if SPEECH_TO_SPEECH_URL:
     LOAD_BALANCER_URL = ""
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+# The browser never receives this service URL. It sends LiveTalking offers to a
+# same-origin endpoint below, which also avoids depending on LiveTalking CORS.
+LIVETALKING_URL = os.environ.get("LIVETALKING_URL", "http://127.0.0.1:8010").rstrip("/")
+LIVETALKING_ENABLED = _env_flag("ENABLE_LIVETALKING") and bool(LIVETALKING_URL)
 # HF injects SPACE_ID ("owner/space") into every Space runtime; it's absent
 # locally and on a plain `docker run`. We meter conversation time ONLY on the
 # deployed Space — i.e. when BOTH the LB is configured AND we're on a Space.
@@ -109,6 +120,7 @@ def _parse_ice_servers(raw: str) -> list:
 
 
 RTC_ICE_SERVERS = _parse_ice_servers(os.environ.get("RTC_ICE_SERVERS", ""))
+LIVETALKING_ICE_SERVERS = _parse_ice_servers(os.environ.get("LIVETALKING_ICE_SERVERS", ""))
 DEFAULT_STARTUP_GREETING = (
     "Start the conversation now with a brief, spontaneous greeting in character. "
     "Keep it to one sentence, invite the user in naturally, and vary the wording each time."
@@ -217,8 +229,35 @@ def config():
         "rtc": bool(SPEECH_TO_SPEECH_URL),
         "iceServers": RTC_ICE_SERVERS,
         "startupGreeting": STARTUP_GREETING,
+        "avatar": {
+            "enabled": LIVETALKING_ENABLED,
+            "iceServers": LIVETALKING_ICE_SERVERS,
+        },
         "auth": AUTH_ENABLED,
     }
+
+
+@app.post("/api/avatar/offer")
+async def avatar_offer(request: Request):
+    """Forward one browser WebRTC offer to the deployment-owned LiveTalking."""
+    if not LIVETALKING_ENABLED:
+        raise HTTPException(status_code=404, detail="LiveTalking avatar is disabled")
+    try:
+        payload = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON offer") from exc
+    if not isinstance(payload, dict) or not payload.get("sdp") or not payload.get("type"):
+        raise HTTPException(status_code=400, detail="Offer requires sdp and type")
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            upstream = await client.post(f"{LIVETALKING_URL}/offer", json=payload)
+    except httpx.RequestError as exc:
+        logger.warning("LiveTalking offer failed: %s", exc)
+        raise HTTPException(status_code=502, detail="LiveTalking is unavailable") from exc
+
+    content_type = upstream.headers.get("content-type", "application/json")
+    return Response(content=upstream.content, status_code=upstream.status_code, media_type=content_type)
 
 
 @app.get("/api/me")

@@ -41,6 +41,7 @@
  * @property {ToolDef[]} [tools]
  * @property {NoiseGate} [noiseGate]
  * @property {string} [audioOutputId]
+ * @property {boolean} [playAudio]
  * @property {(call: {name: string, arguments: string, callId: string}) => Promise<{output: string, image?: string}>} [executeTool]
  */
 
@@ -109,6 +110,8 @@ export class S2sRealtimeClient extends EventTarget {
     this._playbackNode = null;
     this._micAnalyser = null;
     this._outAnalyser = null;
+    this._outputGain = null;
+    this._outputMuted = options.playAudio === false;
     this._remoteSrc = null;
     this._audioElement = null;
     this._visualiser = null;
@@ -179,6 +182,9 @@ export class S2sRealtimeClient extends EventTarget {
       this.options.micStream.getAudioTracks()[0].enabled = false;
       this._audioElement = new Audio();
       this._audioElement.autoplay = true;
+      // Remote WebRTC audio always enters the AudioContext graph below. Keeping
+      // this element muted prevents a transient second playback path.
+      this._audioElement.muted = true;
       this._transport = new OpenAIRealtimeWebRTC({
         mediaStream: this.options.micStream,
         audioElement: this._audioElement,
@@ -340,7 +346,7 @@ export class S2sRealtimeClient extends EventTarget {
       output.fftSize = VIS_FFT_SIZE;
       output.smoothingTimeConstant = 0.3;
       playback.connect(output);
-      output.connect(ctx.destination);
+      this._connectOutput(output);
       this._playbackNode = playback;
       this._outAnalyser = output;
       this._visualiser = new OrbVisualiser(micAnalyser, output, () => this._aiSpeaking);
@@ -362,12 +368,22 @@ export class S2sRealtimeClient extends EventTarget {
     output.fftSize = VIS_FFT_SIZE;
     output.smoothingTimeConstant = 0.3;
     source.connect(output);
-    output.connect(this._ctx.destination);
+    this._connectOutput(output);
     this._remoteSrc = source;
     this._outAnalyser = output;
     this._visualiser = new OrbVisualiser(this._micAnalyser, output, () => this._aiSpeaking);
     this._visualiser.start();
     this._levelTimer = window.setInterval(() => this._pollRtcLevels(), 50);
+  }
+
+  /** Route assistant audio through one controllable output node. */
+  _connectOutput(source) {
+    if (!this._ctx) return;
+    const gain = this._ctx.createGain();
+    gain.gain.value = this._outputMuted ? 0 : 1;
+    source.connect(gain);
+    gain.connect(this._ctx.destination);
+    this._outputGain = gain;
   }
 
   _pollRtcLevels() {
@@ -629,6 +645,13 @@ export class S2sRealtimeClient extends EventTarget {
     if (this.options.transport === "webrtc") this._session?.mute(muted);
   }
 
+  /** Mute only assistant playback; microphone mute remains independent. */
+  setOutputMuted(muted) {
+    this._outputMuted = muted;
+    if (!this._outputGain || !this._ctx) return;
+    this._outputGain.gain.setValueAtTime(muted ? 0 : 1, this._ctx.currentTime);
+  }
+
   /** @param {NoiseGate} gate */
   setNoiseGate(gate) {
     this._noiseGate = gate;
@@ -795,11 +818,12 @@ export class S2sRealtimeClient extends EventTarget {
     this._session?.close();
     this._session = null;
     this._transport = null;
-    for (const node of [this._captureNode, this._playbackNode, this._micSrc, this._micAnalyser, this._remoteSrc, this._outAnalyser]) {
+    for (const node of [this._captureNode, this._playbackNode, this._micSrc, this._micAnalyser, this._remoteSrc, this._outAnalyser, this._outputGain]) {
       try { node?.disconnect(); } catch { /* ignored */ }
     }
     try { await this._ctx?.close(); } catch { /* ignored */ }
     this._ctx = null;
+    this._outputGain = null;
     this._setStatus("closed");
   }
 }

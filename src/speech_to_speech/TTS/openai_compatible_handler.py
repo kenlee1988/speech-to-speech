@@ -24,6 +24,7 @@ from speech_to_speech.pipeline.messages import AUDIO_RESPONSE_DONE, EndOfRespons
 from speech_to_speech.pipeline.speculative_turns import SpeculativeTurnTracker
 
 logger = logging.getLogger(__name__)
+OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 PIPELINE_SAMPLE_RATE = 16000
 
@@ -395,7 +396,9 @@ class OpenAICompatibleTTSHandler(BaseHandler[TTSIn, TTSOut]):
         self.should_listen = should_listen
         self.base_url = base_url.rstrip("/")
         self.endpoint_url = f"{self.base_url}/audio/speech"
-        self.api_key = api_key if api_key is not None else os.getenv("OPENAI_API_KEY")
+        self.api_key = api_key if api_key is not None else os.getenv("OPENAI_TTS_API_KEY")
+        if self.api_key is None and self.base_url == OPENAI_BASE_URL:
+            self.api_key = os.getenv("OPENAI_API_KEY")
         self.model = model
         self.voice = voice
         self.language = language

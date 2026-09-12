@@ -243,7 +243,9 @@ class OpenAICompatibleSTTHandler(BaseSTTHandler):
 
         self.base_url = base_url.rstrip("/")
         self.endpoint_url = f"{self.base_url}/audio/transcriptions"
-        self.api_key = api_key
+        # Endpoint-specific environment variables keep credentials out of the
+        # process command line and allow STT/TTS to use different providers.
+        self.api_key = api_key if api_key is not None else os.getenv("OPENAI_STT_API_KEY")
         if self.api_key is None and self.base_url == OPENAI_BASE_URL:
             self.api_key = os.getenv("OPENAI_API_KEY")
         self.model = model
