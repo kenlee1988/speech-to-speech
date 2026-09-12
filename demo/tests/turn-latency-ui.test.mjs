@@ -83,7 +83,7 @@ test("history shows per-response server timings on desktop and phone", async (t)
     const tool = page.locator(".hist-timings").nth(1);
     await tool.locator("summary").click();
     assert.match(await tool.innerText(), /Unavailable/);
-    assert.equal(await page.locator(".hist-note").textContent(), "Interrupted");
+    assert.equal(await page.locator(".hist-note").textContent(), "已中断");
     assert.equal(await page.locator(".hist-msg.assistant").last().locator(".hist-timings").count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.evaluate(() => { chat.clear(); chat.reset(); });
